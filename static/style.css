@@ -1,0 +1,67 @@
+/* static/style.css */
+
+/* Body & general */
+body {
+    background-color: #121212;
+    color: #e0e0e0;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Navbar */
+.navbar {
+    background-color: #1f1f1f !important;
+    border-bottom: 1px solid #333;
+}
+
+.navbar a, .navbar .navbar-brand {
+    color: #e0e0e0 !important;
+}
+
+/* Cards */
+.card {
+    background-color: #1e1e1e;
+    border: 1px solid #333;
+    color: #e0e0e0;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.6);
+}
+
+/* Buttons */
+.btn-primary {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+.btn-primary:hover {
+    background-color: #0b5ed7;
+}
+
+/* Alert */
+.alert-warning {
+    background-color: #ffc10722;
+    color: #fff;
+}
+
+/* Debug / response box */
+pre.debug {
+    background-color: #212121;
+    color: #cfcfcf;
+    border: 1px solid #333;
+    padding: 10px;
+}
+
+/* Disk wipe animation placeholder */
+.wipe-anim {
+    height: 5px;
+    background: linear-gradient(90deg, #0d6efd, #e83e8c);
+    animation: wipe-progress 2s infinite;
+}
+
+@keyframes wipe-progress {
+    0% { transform: scaleX(0); }
+    50% { transform: scaleX(1); }
+    100% { transform: scaleX(0); }
+}

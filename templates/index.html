@@ -1,0 +1,196 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Local Disk Manager</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(135deg, #1c1c2c, #2e2b44);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    /* Navbar */
+    .navbar {
+      background: rgba(40,40,60,0.95);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+    }
+    .navbar .navbar-brand {
+      color: #fff;
+      font-weight: bold;
+    }
+    .navbar .btn-outline-secondary, .navbar .btn-outline-danger {
+      border-radius: 10px;
+      border-width: 1px;
+      color: #e0e0e0;
+    }
+    .navbar .btn-outline-secondary:hover, .navbar .btn-outline-danger:hover {
+      background: rgba(108,99,255,0.3);
+      border-color: #6c63ff;
+      color: #fff;
+    }
+
+    /* Card */
+    .card {
+      background: rgba(40,40,60,0.95);
+      border-radius: 15px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 30px rgba(0,0,0,0.6);
+    }
+
+    /* Buttons */
+    .btn-primary, .btn-danger {
+      border-radius: 10px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(45deg, #6c63ff, #3f3d56);
+      border: none;
+      font-weight: 600;
+    }
+    .btn-primary:hover {
+      background: linear-gradient(45deg, #5752d3, #2f2d46);
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+    }
+    .btn-danger {
+      background: linear-gradient(45deg, #ff4d4f, #a83232);
+      border: none;
+      color: #fff;
+    }
+    .btn-danger:hover {
+      background: linear-gradient(45deg, #d93636, #7a2020);
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+    }
+    .btn-outline-secondary {
+      color: #e0e0e0;
+      border-color: #6c63ff;
+    }
+    .btn-outline-secondary:hover {
+      background: rgba(108,99,255,0.3);
+      color: #fff;
+    }
+
+    /* Alerts */
+    .alert {
+      border-radius: 10px;
+    }
+
+    /* Response box */
+    pre.debug {
+      max-height: 240px;
+      overflow:auto;
+      background: rgba(50,50,70,0.9);
+      padding: 1rem;
+      border-radius: 10px;
+      color: #fff;
+    }
+
+    /* Disk cards */
+    .card h5 {
+      color: #fff;
+    }
+    .card p {
+      color: #ccc;
+    }
+
+    /* Misc */
+    .text-muted { color: #aaa !important; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand navbar-dark">
+    <div class="container">
+      <a class="navbar-brand" href="#">Disk Manager</a>
+      <div class="ms-auto">
+        <span class="me-3">Hello, {{ current_user.username }}</span>
+        {% if current_user.is_admin %}
+          <a class="btn btn-outline-secondary btn-sm me-2" href="{{ url_for('audit_view') }}">Audit Logs</a>
+        {% endif %}
+        <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container py-4">
+    <div class="alert alert-warning">
+      <strong>Warning:</strong> Real wipes are destructive. Default: destructive actions are blocked unless whitelist is configured and server is run as root/admin.
+    </div>
+
+    <div class="mb-3">
+      <button id="refreshBtn" class="btn btn-primary">Refresh Disks</button>
+      <span class="ms-3 text-muted">Whitelist: {{ whitelist }}</span>
+    </div>
+
+    <div id="disksList">
+      {% if disks is mapping %}
+        <div class="alert alert-danger">Error reading disks: {{ disks }}</div>
+      {% elif disks|length == 0 %}
+        <div class="alert alert-secondary">No mounted partitions found.</div>
+      {% else %}
+        {% for d in disks %}
+          <div class="card mb-2">
+            <div class="card-body">
+              <h5>{{ d.device }} <small class="text-muted">{{ d.mountpoint }}</small></h5>
+              <p>FS: {{ d.fstype or 'N/A' }} • Total: {{ (d.total_bytes | default(0) ) | int }} bytes <br>• Used: {{ d.used_bytes | default(0) }} bytes
+                <br>• Free: {{ d.free_bytes | default(0) }} bytes
+                <br>• Health: {{ d.health }}
+              </p>
+
+              <div>
+                <button class="btn btn-outline-secondary btn-sm me-2" onclick='doSimulate("{{ d.device }}")'>Simulate Wipe</button>
+                <div class="btn-group">
+                  <button class="btn btn-danger btn-sm" onclick='doConfirm("{{ d.device }}","zero")'>Zero-fill</button>
+                  <button class="btn btn-danger btn-sm" onclick='doConfirm("{{ d.device }}","shred")'>Shred</button>
+                  <button class="btn btn-danger btn-sm" onclick='doConfirm("{{ d.device }}","nwipe")'>nwipe</button>
+                  <button class="btn btn-danger btn-sm" onclick='doConfirm("{{ d.device }}","clean_all")'>diskpart clean (win)</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      {% endif %}
+    </div>
+
+    <hr>
+    <h5>Response</h5>
+    <pre id="responseBox" class="debug"></pre>
+  </div>
+
+<script>
+async function fetchDisks(){ const res = await fetch('/api/disks'); return await res.json(); }
+function showResponse(obj){ document.getElementById('responseBox').textContent = JSON.stringify(obj, null, 2); }
+
+document.getElementById('refreshBtn').addEventListener('click', async ()=>{ location.reload(); });
+
+async function doSimulate(device){
+  const phrase = `WIPE ${device} NOW`;
+  const res = await fetch('/api/wipe', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({device, method:'simulate', confirm_phrase: phrase})
+  });
+  showResponse(await res.json());
+}
+
+async function doConfirm(device, method){
+  const phrase = `WIPE ${device} NOW`;
+  const got = prompt(`To confirm destructive wipe of ${device} with method ${method}, type EXACT phrase:\n\n${phrase}`);
+  if (got !== phrase){ alert('Confirmation mismatch — aborted'); return; }
+  const res = await fetch('/api/wipe', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({device, method, confirm_phrase: phrase})
+  });
+  showResponse(await res.json());
+}
+</script>
+</body>
+</html>

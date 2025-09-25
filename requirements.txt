@@ -1,0 +1,7 @@
+Flask
+Flask-Login
+Flask-SQLAlchemy
+psutil
+cryptography
+python-dateutil
+Werkzeug

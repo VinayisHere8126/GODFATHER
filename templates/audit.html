@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Audit Logs</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(135deg, #1c1c2c, #2e2b44);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 2rem 0;
+    }
+
+    /* Back link */
+    .btn-link {
+      color: #6c63ff;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .btn-link:hover {
+      color: #fff;
+      text-decoration: underline;
+    }
+
+    /* Card container */
+    .card {
+      background: rgba(71, 71, 110, 0.95);
+      border-radius: 15px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      padding: 2rem;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 30px rgba(0,0,0,0.6);
+    }
+
+    /* Buttons */
+    .btn-outline-primary, .btn-outline-secondary, .btn-outline-success {
+      border-radius: 10px;
+      border-width: 1px;
+      color: #e0e0e0;
+      transition: all 0.2s ease;
+    }
+    .btn-outline-primary:hover { background: rgba(108,99,255,0.3); color: #fff; border-color: #6c63ff; }
+    .btn-outline-secondary:hover { background: rgba(108,99,255,0.3); color: #fff; border-color: #6c63ff; }
+    .btn-outline-success:hover { background: rgba(72,187,120,0.3); color: #fff; border-color: #48bb78; }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      background: rgba(50, 50, 70, 0.9);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    table th, table td {
+      padding: 0.75rem;
+      border-bottom: 1px solid #555;
+      text-align: left;
+      color: #e0e0e0;
+    }
+    table th {
+      background: rgba(60, 60, 90, 0.9);
+    }
+    table tr:hover {
+      background: rgba(108, 99, 255, 0.1);
+    }
+
+    pre { 
+      white-space: pre-wrap;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <a href="{{ url_for('index') }}" class="btn btn-link">&larr; Back</a>
+      <h3>Audit Logs (recent)</h3>
+      <div class="mb-2">
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('export_audit_csv') }}">Export CSV</a>
+      </div>
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>When (UTC)</th>
+            <th>User</th>
+            <th>Device</th>
+            <th>Method</th>
+            <th>Sim</th>
+            <th>Outcome</th>
+            <th>Proof</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in logs %}
+          <tr>
+            <td>{{ l.id }}</td>
+            <td>{{ l.timestamp }}</td>
+            <td>{{ l.username or 'N/A' }}</td>
+            <td>{{ l.device }}</td>
+            <td>{{ l.method }}</td>
+            <td>{{ 'Y' if l.simulated else 'N' }}</td>
+            <td>{{ l.outcome }}</td>
+            <td>
+              {% if l.proof_uuid %}
+                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('download_proof', proof_uuid=l.proof_uuid) }}">Download</a>
+                <a class="btn btn-sm btn-outline-success" href="{{ url_for('verify_proof_route', proof_uuid=l.proof_uuid) }}" target="_blank">Verify</a>
+              {% else %}
+                N/A
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>
