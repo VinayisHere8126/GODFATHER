@@ -1,4 +1,4 @@
-# app.py
+from dbm import sqlite3
 import os
 import platform
 import shlex
@@ -9,7 +9,9 @@ import argparse
 import json
 import base64
 import uuid
+import paramiko
 from datetime import datetime
+from utils import run_ssh_command
 
 from flask import Flask, jsonify, render_template, request, abort, redirect, url_for, flash, send_file, Response
 from flask_sqlalchemy import SQLAlchemy
@@ -53,8 +55,8 @@ app.config["DEVICE_WHITELIST"] = [x.strip() for x in raw_wl.split(",") if x.stri
 # -------------------------
 # Google OAuth setup
 # -------------------------
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "<58137741976-d4q4gm3dp52plaig4l1ea35r8moc0aja.apps.googleusercontent.com>")
-GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "<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>")
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "<58137741976-o13l1kj20qelmnhi1msp66p72n2gnail.apps.googleusercontent.com>")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "<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>")
 
 google_bp = make_google_blueprint(
     client_id=GOOGLE_CLIENT_ID,
@@ -416,6 +418,44 @@ def logout():
     flash("Logged out", "info")
     return redirect(url_for("login"))
 
+
+
+@app.route('/remote_hosts')
+def remote_hosts():
+    conn = sqlite3.connect('disk_manager.db')
+    cur = conn.cursor()
+    cur.execute("SELECT id, name, ip, username, platform FROM remote_hosts")
+    hosts = cur.fetchall()
+    conn.close()
+    
+    # hosts is a list of tuples; convert to list of dicts
+    hosts_list = [
+        {"id": h[0], "name": h[1], "ip": h[2], "username": h[3], "platform": h[4]}
+        for h in hosts
+    ]
+    return render_template('remote_hosts.html', hosts=hosts_list)
+
+@app.route('/remote_hosts/<int:host_id>/run', methods=['POST'])
+def run_command(host_id):
+    command = request.form.get('command')
+    if not command:
+        return jsonify({"error": "No command provided"}), 400
+    
+    # Fetch host details from DB
+    conn = sqlite3.connect('disk_manager.db')
+    cur = conn.cursor()
+    cur.execute("SELECT ip, username, ssh_key FROM remote_hosts WHERE id = ?", (host_id,))
+    row = cur.fetchone()
+    conn.close()
+    
+    if not row:
+        return jsonify({"error": "Host not found"}), 404
+    
+    ip, username, ssh_key = row
+    output, error = run_ssh_command(ip, username, ssh_key, command)
+    return jsonify({"output": output, "error": error})
+
+
 # -------------------------
 # Routes: UI & API
 # -------------------------
@@ -438,83 +478,38 @@ def audit_view():
 def api_disks():
     return jsonify(get_disks())
 
+import os
+from flask import Flask, request, jsonify
+
 @app.route("/api/wipe", methods=["POST"])
-@login_required
 def api_wipe():
     data = request.json or {}
-    device = data.get("device")
+    device = data.get("device")  # e.g. "D:"
     method = data.get("method", "simulate")
-    confirm_phrase = data.get("confirm_phrase", "")
 
-    if not device:
-        return jsonify({"error": "device is required"}), 400
+    if method == "simulate":
+        # Try scanning the disk
+        try:
+            file_list = []
+            for root, dirs, files in os.walk(device + "\\"):
+                for name in files:
+                    path = os.path.join(root, name)
+                    size = os.path.getsize(path) // 1024  # KB
+                    file_list.append(f"{path} ({size} KB)")
+                    if len(file_list) > 50:  # limit to 50 for speed
+                        break
+                if len(file_list) > 50:
+                    break
+            return jsonify({"status": "ok", "files": file_list})
+        except Exception as e:
+            return jsonify({"status": "error", "error": str(e)}), 500
 
-    expected_phrase = f"WIPE {device} NOW"
-    if confirm_phrase.strip() != expected_phrase:
-        # record aborted attempt
-        record_audit(current_user, device, method, simulated=(method=="simulate"), confirm_phrase=confirm_phrase, outcome="aborted")
-        return jsonify({"error": "Invalid confirmation phrase. Type exact phrase: " + expected_phrase}), 400
+    # other wipe methods...
+    return jsonify({"status": "pending"})
 
-    simulated = (method == "simulate")
 
-    # checks for destructive ops
-    if not simulated:
-        if not current_user.is_admin:
-            record_audit(current_user, device, method, simulated=False, confirm_phrase=confirm_phrase, outcome="forbidden_not_admin")
-            return jsonify({"error": "Only admin users can perform destructive wipes."}), 403
-        if not allowed_device(device):
-            record_audit(current_user, device, method, simulated=False, confirm_phrase=confirm_phrase, outcome="forbidden_not_whitelisted")
-            return jsonify({"error": "Device not in whitelist. Set DM_WHITELIST or edit config."}), 403
-        if not is_root():
-            record_audit(current_user, device, method, simulated=False, confirm_phrase=confirm_phrase, outcome="forbidden_not_root")
-            return jsonify({"error": "Server must be run as root/Administrator for destructive wipes."}), 403
+    return jsonify({"success": True, "device": device, "method": method, "message": result})
 
-    # create initial audit entry (started)
-    pre_entry = record_audit(current_user, device, method, simulated=simulated, confirm_phrase=confirm_phrase, outcome="started")
-
-    # Simulated path (fast)
-    if simulated:
-        pre_entry.outcome = "simulated"
-        pre_entry.stdout = "SIMULATED"
-        db.session.commit()
-        create_and_attach_proof(pre_entry)
-        return jsonify({"status": "simulated", "message": f"Simulated wipe for {device}"}), 200
-
-    # Build the command
-    try:
-        cmd, desc = build_wipe_command(device, method)
-    except ValueError as e:
-        pre_entry.outcome = "error_build_cmd"
-        pre_entry.stderr = str(e)
-        db.session.commit()
-        create_and_attach_proof(pre_entry)
-        return jsonify({"error": str(e)}), 400
-
-    # Execute (synchronously) — local use only
-    try:
-        # run as a subprocess, collect stdout/stderr
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        out, err = proc.communicate()
-        outcome = "done" if proc.returncode == 0 else "error"
-        pre_entry.outcome = outcome
-        pre_entry.returncode = proc.returncode
-        pre_entry.stdout = out
-        pre_entry.stderr = err
-        db.session.commit()
-        create_and_attach_proof(pre_entry)
-        return jsonify({
-            "status": outcome,
-            "returncode": proc.returncode,
-            "cmd_desc": desc,
-            "stdout": out,
-            "stderr": err
-        }), (200 if proc.returncode == 0 else 500)
-    except Exception as e:
-        pre_entry.outcome = "exception"
-        pre_entry.stderr = str(e)
-        db.session.commit()
-        create_and_attach_proof(pre_entry)
-        return jsonify({"error": f"failed to execute: {str(e)}"}), 500
 
 # Proof download + verify
 @app.route("/proof/<proof_uuid>")

@@ -1,27 +1,37 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Sign Up</title>
+  <title>Sign Up — Disk Manager</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body {
+      height: 100vh;
       background: linear-gradient(135deg, #1c1c2c, #2e2b44);
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      color: #e0e0e0;
-      min-height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
+
+    /* Signup card */
     .card {
-      background: rgba(75, 75, 99, 0.95);
+      background: rgba(89, 89, 124, 0.95);
       border-radius: 15px;
       padding: 2rem;
       width: 100%;
       max-width: 400px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      transform: translateY(20px);
+      opacity: 0;
+      transition: transform 0.5s ease, opacity 0.5s ease, box-shadow 0.3s ease;
     }
+    .card.visible { transform: translateY(0); opacity: 1; }
+    .card:hover { box-shadow: 0 15px 30px rgba(0,0,0,0.6); }
+
+    h3 { color: #e0e0e0; text-align: center; margin-bottom: 1.5rem; }
+
+    /* Inputs */
     .form-control {
       border-radius: 10px;
       background: rgba(60,60,80,0.8);
@@ -29,6 +39,7 @@
       color: #fff;
       padding: 0.6rem 1rem;
       margin-bottom: 1rem;
+      transition: border-color 0.3s, box-shadow 0.3s, background 0.3s;
     }
     .form-control:focus {
       border-color: #6c63ff;
@@ -36,22 +47,42 @@
       background: rgba(60,60,80,1);
       color: #fff;
     }
+
+    /* Buttons */
     .btn-primary {
-      background: linear-gradient(45deg, #6c63ff, #3f3d56);
+      width: 100%;
+      padding: 0.75rem;
       border: none;
       border-radius: 10px;
       font-weight: 600;
-      width: 100%;
+      background: linear-gradient(45deg, #6c63ff, #3f3d56);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
     }
     .btn-primary:hover {
       background: linear-gradient(45deg, #5752d3, #2f2d46);
+      transform: translateY(-2px) scale(1.05);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.4);
     }
-    .alert { border-radius: 10px; text-align: center; }
+
+    /* Flash messages */
+    .alert {
+      border-radius: 10px;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(-10px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .alert.visible { opacity: 1; transform: translateY(0); }
+
+    /* Links */
+    a { color: #6c63ff; font-weight: 600; text-decoration: none; transition: all 0.2s ease; }
+    a:hover { color: #fff; text-decoration: underline; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h3 class="text-center mb-3">Sign Up</h3>
+    <h3>Sign Up</h3>
+
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
@@ -59,14 +90,27 @@
         {% endfor %}
       {% endif %}
     {% endwith %}
+
     <form method="POST">
       <input type="text" name="username" class="form-control" placeholder="Username" required>
       <input type="password" name="password" class="form-control" placeholder="Password" required>
       <button type="submit" class="btn btn-primary">Sign Up</button>
     </form>
+
     <p class="text-center mt-3">
-      Already have an account? <a href="{{ url_for('login') }}" style="color:#6c63ff;">Log In</a>
+      Already have an account? <a href="{{ url_for('login') }}">Log In</a>
     </p>
   </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", ()=>{
+      // Animate card
+      document.querySelector(".card").classList.add("visible");
+      // Animate flash messages sequentially
+      document.querySelectorAll(".alert").forEach((a,i)=>{
+        setTimeout(()=> a.classList.add("visible"), i*200);
+      });
+    });
+  </script>
 </body>
 </html>
